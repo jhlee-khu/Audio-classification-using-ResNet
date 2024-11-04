@@ -4,63 +4,35 @@
 import csv
 import librosa
 import librosa.display
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt 
 
-def split_y_n_pad(y,patchsize):
-    # split y to multiple array (patches) which length == patchsize
-    # if patch size is smaller than var(patchsize) => zero pad
-    num_patches = int(np.ceil(len(y) / patchsize))
-    padded = np.pad (y, (0, patchsize * num_patches - len(y)),'constant')
-    patches = np.reshape (padded, (-1,patchsize))
 
-    return patches
-
-def spectrogram_image(filename,fold,filepath,class_num):
+def spectrogram_image(filename,fold,filepath):
     y, sr = librosa.load(filepath)
+         
+    if len(y) < 5 * sr:
+        y = np.pad(y, ( int(( (5 * sr - len(y)) /2)) , int(( (5 * sr - len(y)) / 2 ) ) ) , mode = 'constant')
 
-    patchsize = int(sr * 640/1000)
-    patches = split_y_n_pad(y,patchsize)
-    patch_idx = len(patches)
+    mel = librosa.feature.melspectrogram(y = y, sr = sr,n_mels = 216)
+    log_mel = librosa.power_to_db(mel, ref = np.max)
 
-    hop = int(np.round(patchsize / 64)) 
-    window_size = int(np.round(2.5 * hop)) # window size will be 25 ms, and hop 10 ms
-
-    annot_file_path = './annotation.csv'
-    f = open (annot_file_path,'a',newline = '')
-    wr = csv.writer(f)
-
-    for i in range(0,patch_idx):
-        stft = librosa.stft(patches[i], n_fft = window_size, hop_length = hop)
-        mel = librosa.filters.mel(sr = sr, n_fft = window_size, n_mels = 64)
-        power = np.abs(stft) ** 2
-        mel_spec = np.dot(mel, power)
-        fig = plt.figure(figsize = (64/77,64/77))
-        librosa.display.specshow(mel_spec, sr=sr, hop_length = hop)
-
-        # fold 1~7 => training set
-        # fold 8,9 => validation set
-        # fold 10 => testset
-        if (fold  <= 7):
-            new_filepath = './training/' + str(i) + '-' + filename+'.png'
-        elif (fold == 8 or fold == 9):
-            new_filepath = './validation/' + str(i) + '-' + filename+'.png'
-        else:
-            new_filepath = './test/' + str(i) + '-' + filename+'.png'
-        
-        fig.savefig(fname = new_filepath, bbox_inches = 'tight', pad_inches = 0)
-
-        #write annotation file
-        row = [str(i) + '-' + filename+'.png',class_num]
-        wr.writerow(row)
-        
-        plt.close()
-    f.close()
+    fig = plt.figure(figsize = (1.5,1.5))
     
+    librosa.display.specshow(log_mel, sr=sr)
+    filename = filename.strip('.wav')
+        
+    if (fold  <= 8):
+        new_filepath = './us8k_train/'+ filename +'.tif' # your path
+    else:
+        new_filepath = './us8k_valid/'+ filename+'.tif' # your path
+        
+    fig.savefig(fname = new_filepath, bbox_inches = 'tight', pad_inches = 0)
+    plt.close(fig)
 
 
 # main loop
-metadata = open('./metadata/UrbanSound8K.csv','r')
+metadata = open('./UrbanSound8K.csv','r')
 line = csv.reader(metadata)
 
 itr = -1
@@ -71,11 +43,5 @@ for ln in line:
     filename = ln[0]
     fold = ln[5]
     class_num = ln[6]
-    filepath = './audio/fold' + fold + '/' + filename
-    spectrogram_image(filename,int(fold),filepath,class_num)
-
-''' 
-#test 
-    if itr == 5:
-        break
-'''
+    filepath = './audio/fold' + fold + '/' + filename # your path
+    spectrogram_image(filename,int(fold),filepath)
